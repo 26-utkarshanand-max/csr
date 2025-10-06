@@ -1,0 +1,63 @@
+diff --git a/static/css/styles.css b/static/css/styles.css
+index 61c066d7a8f0280c65b4171e3d60b2c54c8a5d01..9870fc2b7340f9451a169af9d4577b4fd827e465 100644
+--- a/static/css/styles.css
++++ b/static/css/styles.css
+@@ -1,19 +1,58 @@
+ :root { --bg:#0f1222; --card:#171a2e; --text:#fff; --muted:#b8bcd0; --accent:#8ab4f8; }
+ html, body { margin:0; padding:0; font-family:system-ui, Arial; background:var(--bg); color:var(--text); }
+ .wrap { max-width:1100px; margin:0 auto; padding:20px; }
+ .topbar { background:#12152a; border-bottom:1px solid #262a4a; position:sticky; top:0; z-index:10; }
+ .topbar h1 { margin:0; font-size:20px; }
+ nav a { color:var(--muted); margin-left:14px; text-decoration:none; }
+ nav a:hover { color:var(--accent); }
+ h2 { margin-top:12px; }
+ .card { background:var(--card); border:1px solid #262a4a; border-radius:12px; padding:16px; margin:16px 0; }
+ .row { display:flex; gap:12px; flex-wrap:wrap; }
+ label { display:flex; flex-direction:column; gap:6px; }
+ input, select, button { padding:8px 10px; border-radius:8px; border:1px solid #2e335a; background:#0e1130; color:#fff; }
+ button { cursor:pointer; }
+ button:hover { background:#151a46; }
+ .tablewrap { overflow:auto; background:#0b0e24; border-radius:8px; padding:8px; }
+ .steps { line-height:1.8; color:var(--muted); }
+ .btn { display:inline-block; padding:8px 12px; background:#0e1130; border-radius:8px; border:1px solid #2e335a; color:#fff; text-decoration:none; }
+ .error { color:#ff8585; }
+ .footer { color:var(--muted); border-top:1px solid #262a4a; }
++
++.csr-dashboard { margin-top:24px; }
++.csr-react-root { min-height:70vh; }
++.csr-panel { display:flex; flex-direction:column; gap:24px; }
++.csr-header h1 { margin-bottom:8px; }
++.csr-header p { color:var(--muted); max-width:760px; }
++.csr-controls { display:flex; flex-wrap:wrap; gap:16px; align-items:center; background:rgba(23,26,46,0.8); padding:16px; border-radius:12px; border:1px solid #262a4a; }
++.csr-upload { display:flex; flex-direction:column; gap:6px; font-weight:600; }
++.csr-upload input[type="file"] { padding:6px; border-radius:8px; border:1px dashed #3b4070; background:#0e1130; color:#fff; cursor:pointer; }
++.csr-toggles { display:flex; flex-direction:column; gap:8px; color:var(--muted); }
++.csr-toggles label { display:flex; align-items:center; gap:8px; font-weight:500; }
++.csr-error { padding:12px 16px; border-radius:10px; background:rgba(255,132,132,0.1); border:1px solid rgba(255,132,132,0.4); color:#ffb5b5; }
++.csr-company-picker { display:flex; flex-direction:column; gap:12px; }
++.csr-company-buttons { display:flex; flex-wrap:wrap; gap:10px; }
++.csr-button { padding:8px 14px; border-radius:999px; border:1px solid #2f335c; background:#141833; color:#e2e6ff; cursor:pointer; transition:all 0.2s ease; }
++.csr-button:hover { background:#1b2046; }
++.csr-button.is-active { background:#22c55e; border-color:#22c55e; color:#08120a; font-weight:600; }
++.csr-placeholder { color:var(--muted); font-style:italic; }
++.csr-results { display:flex; flex-direction:column; gap:24px; }
++.csr-card { background:rgba(23,26,46,0.9); border:1px solid #2f3658; border-radius:16px; padding:20px; display:flex; flex-direction:column; gap:16px; }
++.csr-card-header h2, .csr-card-header h3 { margin:0; }
++.csr-card-header p { margin:4px 0 0; color:var(--muted); }
++.csr-table-wrapper { overflow:auto; border-radius:12px; border:1px solid #262a4a; }
++.csr-table-wrapper--wide { max-height:420px; }
++.csr-table { width:100%; border-collapse:collapse; font-size:14px; }
++.csr-table thead { background:#151a33; position:sticky; top:0; }
++.csr-table th, .csr-table td { padding:8px 12px; text-align:left; border-bottom:1px solid #262a4a; white-space:nowrap; }
++.csr-table tbody tr:hover { background:rgba(43,51,95,0.5); }
++.csr-table--compact th, .csr-table--compact td { padding:6px 10px; font-size:13px; }
++.csr-chart-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
++.csr-chart-card { background:rgba(15,18,34,0.9); border:1px solid #262a4a; border-radius:12px; padding:12px; }
++.csr-chart-card h4 { margin:0 0 8px; font-size:15px; }
++.csr-chart { height:240px; }
++
++@media (max-width:640px) {
++  .csr-controls { flex-direction:column; align-items:flex-start; }
++  .csr-toggles { width:100%; }
++  .csr-table th, .csr-table td { white-space:normal; }
++}

@@ -1,0 +1,452 @@
+diff --git a//dev/null b/templates/csr_dashboard.html
+index 0000000000000000000000000000000000000000..4ced89c543316d9eec01275a27402a05c4c2b1db 100644
+--- a//dev/null
++++ b/templates/csr_dashboard.html
+@@ -0,0 +1,447 @@
++{% extends "base.html" %}
++{% block content %}
++<section class="csr-dashboard">
++  <div id="csr-dashboard-root" class="csr-react-root"></div>
++</section>
++
++<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
++<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
++<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
++<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
++<script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
++<script type="text/babel">
++  const { useState, useMemo } = React;
++  const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = Recharts;
++
++  const VARIABLES = [
++    "DebtEquity",
++    "ROA",
++    "ROE",
++    "TobinQ",
++    "Beta",
++    "FirmRisk",
++    "Tangibility",
++    "SizeLog",
++    "Growth",
++    "AgeLog",
++    "CSR_Expend"
++  ];
++
++  const sanitizeRows = (rows) =>
++    rows.map((row) => {
++      const cleaned = {};
++      Object.entries(row || {}).forEach(([key, value]) => {
++        if (!key || key.toLowerCase().includes("empty")) {
++          return;
++        }
++        cleaned[key.trim()] = value;
++      });
++      return cleaned;
++    });
++
++  const groupByCompany = (rows) =>
++    rows.reduce((acc, row) => {
++      const company = row.Company || row.company || "Unknown";
++      if (!acc[company]) {
++        acc[company] = [];
++      }
++      acc[company].push(row);
++      return acc;
++    }, {});
++
++  const numericColumnsFrom = (dataset) => {
++    if (!dataset || dataset.length === 0) {
++      return [];
++    }
++    const keys = new Set();
++    dataset.forEach((row) => {
++      Object.entries(row || {}).forEach(([key, value]) => {
++        if (typeof value === "number" && !["Year", "CSR_pct", "CSR_pct_std"].includes(key)) {
++          keys.add(key);
++        }
++      });
++    });
++    return Array.from(keys);
++  };
++
++  const calculateDescriptiveStats = (dataset) => {
++    const numericCols = numericColumnsFrom(dataset);
++    return numericCols.map((col) => {
++      const values = dataset
++        .map((row) => Number(row[col]))
++        .filter((value) => !Number.isNaN(value));
++
++      if (values.length === 0) {
++        return { col, N: 0, Mean: 0, SD: 0, Min: 0, Q1: 0, Median: 0, Q3: 0, Max: 0 };
++      }
++
++      const N = values.length;
++      const mean = values.reduce((sum, value) => sum + value, 0) / N;
++      const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / N;
++      const sd = Math.sqrt(variance);
++      const sorted = [...values].sort((a, b) => a - b);
++      const pick = (p) => {
++        if (sorted.length === 1) {
++          return sorted[0];
++        }
++        const index = Math.floor((sorted.length - 1) * p);
++        return sorted[index];
++      };
++
++      return {
++        col,
++        N,
++        Mean: mean,
++        SD: sd,
++        Min: sorted[0],
++        Q1: pick(0.25),
++        Median: pick(0.5),
++        Q3: pick(0.75),
++        Max: sorted[sorted.length - 1]
++      };
++    });
++  };
++
++  const formatStatValue = (value, { digits = 4, allowNegativeZero = false } = {}) => {
++    if (!Number.isFinite(value)) {
++      return "—";
++    }
++    const fixed = value.toFixed(digits);
++    if (!allowNegativeZero && Number(fixed) === 0) {
++      return `0.${"0".repeat(digits)}`;
++    }
++    return fixed;
++  };
++
++  const DESCRIPTIVE_COLUMNS = [
++    { key: "col", label: "Variable", format: (stat) => stat.col },
++    { key: "N", label: "N", format: (stat) => stat.N.toLocaleString() },
++    { key: "Mean", label: "Mean", format: (stat) => formatStatValue(stat.Mean) },
++    { key: "SD", label: "SD", format: (stat) => formatStatValue(stat.SD) },
++    { key: "Min", label: "Min", format: (stat) => formatStatValue(stat.Min) },
++    { key: "Q1", label: "Q1", format: (stat) => formatStatValue(stat.Q1) },
++    { key: "Median", label: "Median", format: (stat) => formatStatValue(stat.Median) },
++    { key: "Q3", label: "Q3", format: (stat) => formatStatValue(stat.Q3) },
++    { key: "Max", label: "Max", format: (stat) => formatStatValue(stat.Max) }
++  ];
++
++  const calculateCorrelation = (dataset) => {
++    const numericCols = numericColumnsFrom(dataset);
++    const matrix = {};
++
++    numericCols.forEach((x) => {
++      matrix[x] = {};
++      numericCols.forEach((y) => {
++        const pairs = dataset
++          .map((row) => [Number(row[x]), Number(row[y])])
++          .filter(([a, b]) => !Number.isNaN(a) && !Number.isNaN(b));
++        const n = pairs.length;
++        if (n === 0) {
++          matrix[x][y] = 0;
++          return;
++        }
++        const xs = pairs.map((pair) => pair[0]);
++        const ys = pairs.map((pair) => pair[1]);
++        const meanX = xs.reduce((sum, value) => sum + value, 0) / n;
++        const meanY = ys.reduce((sum, value) => sum + value, 0) / n;
++        const numerator = xs.reduce((acc, value, index) => acc + (value - meanX) * (ys[index] - meanY), 0);
++        const denominator = Math.sqrt(
++          xs.reduce((acc, value) => acc + Math.pow(value - meanX, 2), 0) *
++            ys.reduce((acc, value) => acc + Math.pow(value - meanY, 2), 0)
++        );
++        matrix[x][y] = denominator === 0 ? 0 : numerator / denominator;
++      });
++    });
++
++    return { cols: numericCols, matrix };
++  };
++
++  const CSRPanelRegressionDashboard = () => {
++    const [data, setData] = useState([]);
++    const [companyGroups, setCompanyGroups] = useState({});
++    const [selectedCompany, setSelectedCompany] = useState("All Companies");
++    const [showDesc, setShowDesc] = useState(true);
++    const [showCorr, setShowCorr] = useState(true);
++    const [error, setError] = useState("");
++
++    const handleExcelUpload = (event) => {
++      const file = event.target.files && event.target.files[0];
++      if (!file) {
++        return;
++      }
++      const reader = new FileReader();
++      reader.onload = (loadEvent) => {
++        try {
++          const payload = loadEvent.target.result;
++          const workbook =
++            typeof payload === "string"
++              ? XLSX.read(payload, { type: "binary" })
++              : XLSX.read(payload, { type: "array" });
++          const sheetName = workbook.SheetNames[0];
++          const worksheet = workbook.Sheets[sheetName];
++          const json = XLSX.utils.sheet_to_json(worksheet, { defval: null });
++          const cleaned = sanitizeRows(json);
++          const grouped = groupByCompany(cleaned);
++          setData(cleaned);
++          setCompanyGroups(grouped);
++          setSelectedCompany("All Companies");
++          setError("");
++        } catch (err) {
++          console.error(err);
++          setError("Unable to read the selected file. Please make sure it is a valid .xlsx workbook.");
++        }
++      };
++      if (typeof reader.readAsArrayBuffer === "function") {
++        reader.readAsArrayBuffer(file);
++      } else if (typeof reader.readAsBinaryString === "function") {
++        reader.readAsBinaryString(file);
++      } else {
++        setError("This browser cannot read files in the required format.");
++      }
++    };
++
++    const companies = useMemo(() => Object.keys(companyGroups).sort(), [companyGroups]);
++
++    const activeDataset = useMemo(() => {
++      if (selectedCompany === "All Companies") {
++        return data;
++      }
++      return companyGroups[selectedCompany] || [];
++    }, [selectedCompany, data, companyGroups]);
++
++    const headers = useMemo(() => {
++      if (!activeDataset || activeDataset.length === 0) {
++        return [];
++      }
++      const order = [];
++      const seen = new Set();
++      activeDataset.forEach((row) => {
++        Object.keys(row || {}).forEach((key) => {
++          if (!seen.has(key)) {
++            seen.add(key);
++            order.push(key);
++          }
++        });
++      });
++      return order;
++    }, [activeDataset]);
++
++    const descriptiveStats = useMemo(() => calculateDescriptiveStats(activeDataset), [activeDataset]);
++    const correlation = useMemo(() => calculateCorrelation(activeDataset), [activeDataset]);
++
++    const chartData = useMemo(
++      () =>
++        activeDataset.map((row) => {
++          const converted = { ...row };
++          ["CSR_pct", ...VARIABLES].forEach((key) => {
++            if (converted[key] !== undefined && converted[key] !== null && converted[key] !== "") {
++              const numericValue = Number(converted[key]);
++              converted[key] = Number.isNaN(numericValue) ? converted[key] : numericValue;
++            }
++          });
++          return converted;
++        }),
++      [activeDataset]
++    );
++
++    const hasData = activeDataset && activeDataset.length > 0;
++
++    return (
++      <div className="csr-panel">
++        <header className="csr-header">
++          <h1>CSR Intensity Dashboard</h1>
++          <p>
++            Upload an Excel workbook (.xlsx) with company-year observations to analyse CSR_pct relationships with key
++            financial indicators. Columns containing the word "empty" are ignored automatically.
++          </p>
++        </header>
++
++        <div className="csr-controls">
++          <label className="csr-upload">
++            <span className="csr-upload-label">Upload Excel file</span>
++            <input type="file" accept=".xlsx" onChange={handleExcelUpload} />
++          </label>
++          <div className="csr-toggles">
++            <label>
++              <input type="checkbox" checked={showDesc} onChange={(event) => setShowDesc(event.target.checked)} />
++              Show descriptive statistics
++            </label>
++            <label>
++              <input type="checkbox" checked={showCorr} onChange={(event) => setShowCorr(event.target.checked)} /> Show
++              correlation matrix
++            </label>
++          </div>
++        </div>
++
++        {error && <div className="csr-error">{error}</div>}
++
++        {companies.length > 0 && (
++          <div className="csr-company-picker">
++            <h2>Select company</h2>
++            <div className="csr-company-buttons">
++              <button
++                type="button"
++                className={`csr-button ${selectedCompany === "All Companies" ? "is-active" : ""}`}
++                onClick={() => setSelectedCompany("All Companies")}
++              >
++                All Companies
++              </button>
++              {companies.map((company) => (
++                <button
++                  key={company}
++                  type="button"
++                  className={`csr-button ${selectedCompany === company ? "is-active" : ""}`}
++                  onClick={() => setSelectedCompany(company)}
++                >
++                  {company}
++                </button>
++              ))}
++            </div>
++          </div>
++        )}
++
++        {!hasData && <p className="csr-placeholder">Upload data to explore CSR intensity trends by company.</p>}
++
++        {hasData && (
++          <div className="csr-results">
++            <section className="csr-card">
++              <header className="csr-card-header">
++                <h2>{selectedCompany === "All Companies" ? "All companies" : selectedCompany}</h2>
++                <p>Data overview</p>
++              </header>
++              <div className="csr-table-wrapper">
++                <table className="csr-table">
++                  <thead>
++                    <tr>
++                      {headers.map((header) => (
++                        <th key={header}>{header}</th>
++                      ))}
++                    </tr>
++                  </thead>
++                  <tbody>
++                    {activeDataset.map((row, index) => (
++                      <tr key={index}>
++                        {headers.map((header) => (
++                          <td key={header}>{row[header] !== null && row[header] !== undefined ? row[header] : ""}</td>
++                        ))}
++                      </tr>
++                    ))}
++                  </tbody>
++                </table>
++              </div>
++            </section>
++
++            <section className="csr-card">
++              <header className="csr-card-header">
++                <h3>CSR vs explanatory variables</h3>
++                <p>Compare CSR percentage to financial indicators across time.</p>
++              </header>
++              {chartData.length === 0 ? (
++                <p className="csr-placeholder">Not enough data to display charts.</p>
++              ) : (
++                <div className="csr-chart-grid">
++                  {VARIABLES.map((variable) => (
++                    <div key={variable} className="csr-chart-card">
++                      <h4>CSR_pct vs {variable}</h4>
++                      <div className="csr-chart">
++                        <ResponsiveContainer width="100%" height={240}>
++                          <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
++                            <CartesianGrid strokeDasharray="3 3" stroke="#2f3658" />
++                            <XAxis dataKey="Year" stroke="#c5cae9" tick={{ fill: "#c5cae9" }} />
++                            <YAxis stroke="#c5cae9" tick={{ fill: "#c5cae9" }} />
++                            <Tooltip contentStyle={{ background: "#1b1f35", border: "1px solid #2f3658" }} />
++                            <Legend />
++                            <Line type="monotone" dataKey="CSR_pct" stroke="#22c55e" name="CSR %" dot={false} strokeWidth={2} />
++                            <Line type="monotone" dataKey={variable} stroke="#60a5fa" name={variable} dot={false} strokeWidth={2} />
++                          </LineChart>
++                        </ResponsiveContainer>
++                      </div>
++                    </div>
++                  ))}
++                </div>
++              )}
++            </section>
++
++            {showDesc && (
++              <section className="csr-card">
++                <header className="csr-card-header">
++                  <h3>Descriptive statistics</h3>
++                  <p>Summary statistics for numeric variables.</p>
++                </header>
++                {descriptiveStats.length === 0 ? (
++                  <p className="csr-placeholder">No numeric variables found.</p>
++                ) : (
++                  <div className="csr-table-wrapper">
++                    <table className="csr-table csr-table--compact">
++                      <thead>
++                        <tr>
++                          {DESCRIPTIVE_COLUMNS.map((column) => (
++                            <th key={column.key}>{column.label}</th>
++                          ))}
++                        </tr>
++                      </thead>
++                      <tbody>
++                        {descriptiveStats.map((stat) => (
++                          <tr key={stat.col}>
++                            {DESCRIPTIVE_COLUMNS.map((column) => (
++                              <td key={column.key}>{column.format(stat)}</td>
++                            ))}
++                          </tr>
++                        ))}
++                      </tbody>
++                    </table>
++                  </div>
++                )}
++              </section>
++            )}
++
++            {showCorr && (
++              <section className="csr-card">
++                <header className="csr-card-header">
++                  <h3>Correlation matrix</h3>
++                  <p>Pairwise Pearson correlation coefficients for numeric variables.</p>
++                </header>
++                {correlation.cols.length === 0 ? (
++                  <p className="csr-placeholder">Not enough numeric data to compute correlations.</p>
++                ) : (
++                  <div className="csr-table-wrapper csr-table-wrapper--wide">
++                    <table className="csr-table csr-table--compact">
++                      <thead>
++                        <tr>
++                          <th>Variable</th>
++                          {correlation.cols.map((col) => (
++                            <th key={col}>{col}</th>
++                          ))}
++                        </tr>
++                      </thead>
++                      <tbody>
++                        {correlation.cols.map((rowKey) => (
++                          <tr key={rowKey}>
++                            <td>{rowKey}</td>
++                            {correlation.cols.map((colKey) => (
++                              <td key={colKey}>{correlation.matrix[rowKey][colKey].toFixed(2)}</td>
++                            ))}
++                          </tr>
++                        ))}
++                      </tbody>
++                    </table>
++                  </div>
++                )}
++              </section>
++            )}
++          </div>
++        )}
++      </div>
++    );
++  };
++
++  document.addEventListener("DOMContentLoaded", () => {
++    const rootElement = document.getElementById("csr-dashboard-root");
++    if (!rootElement) {
++      return;
++    }
++    const root = ReactDOM.createRoot(rootElement);
++    root.render(<CSRPanelRegressionDashboard />);
++  });
++</script>
++{% endblock %}

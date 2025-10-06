@@ -1,0 +1,19 @@
+diff --git a/.gitignore b/.gitignore
+index 6a1b7e798d3803a9aaac390e4874acb110bb2b45..b5ef00e86b912d56254951f8ed5ae8b29804618e 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,9 +1,14 @@
+ .venv/
+ __pycache__/
+ *.pyc
+ .env
+ uploads/
++# keep generated artefacts out of version control but allow curated samples
+ data/
++!data/
++data/*
++!data/sample_csr_dashboard.xlsx
+ *.xlsx
++!data/sample_csr_dashboard.xlsx
+ *.csv
+ .DS_Store
